@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fapiao"
+dynamic = ["version"]
+description = "用于合并发票与订单票据 PDF 的命令行工具"
+requires-python = ">=3.11"
+dependencies = [
+  "typer",
+  "paddleocr",
+  "pymupdf",
+  "pillow",
+  "reportlab",
+  "opencv-python-headless",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "hypothesis",
+]
+
+[project.scripts]
+fapiao = "fapiao_pdf.cli:app"
+
+[tool.hatch.version]
+path = "src/fapiao_pdf/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fapiao_pdf"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
