@@ -1,1 +1,69 @@
+# ===== Python 字节码 / 编译产物 =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ===== 构建 / 打包 =====
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+wheels/
+share/python-wheels/
+MANIFEST
+
+# ===== 虚拟环境 =====
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# ===== 测试 / 覆盖率 / 类型检查缓存 =====
+.pytest_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.cover
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+
+# ===== 包管理器锁缓存 =====
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ===== IDE / 编辑器 =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 项目辅助工具索引 =====
 .ace-tool/
+.claude/
+.fast-context/
+
+# ===== 运行输出 =====
+out.pdf
+out_*.pdf
+/output/
+*.log
+
+# ===== 环境变量 / 密钥 =====
+.env
+.env.*
+!.env.example
