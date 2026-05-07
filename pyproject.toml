@@ -17,10 +17,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+web = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+  "python-multipart>=0.0.9,<1",
+]
 dev = [
   "pytest",
   "pytest-cov",
   "hypothesis",
+  "httpx>=0.27,<1",
 ]
 
 [project.scripts]
