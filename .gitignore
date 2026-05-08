@@ -56,6 +56,9 @@ desktop.ini
 .ace-tool/
 .claude/
 .fast-context/
+.context
+.spec-workflow
+openspec
 
 # ===== 运行输出 =====
 out.pdf
