@@ -61,6 +61,10 @@ def _is_cache_populated(cache_dir: Path) -> bool:
     return any(cache_dir.rglob("*.pdmodel")) or any(cache_dir.rglob("*.pdiparams"))
 
 
+def ocr_cache_present() -> bool:
+    return any(_is_cache_populated(path) for path in _paddle_cache_dirs())
+
+
 def ensure_ocr_ready(*, allow_download: bool) -> None:
     """校验 PaddleOCR 模型可用；merge 模式禁止联网下载。"""
 

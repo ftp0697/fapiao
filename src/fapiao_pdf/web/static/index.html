@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fapiao 票据合并</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <main class="layout">
+    <section id="upload-card" class="card">
+      <h1>fapiao 票据合并</h1>
+      <p class="hint">上传发票与订单（JPG / PNG / PDF），离线合并为可打印 PDF。</p>
+      <form id="upload-form" novalidate>
+        <div class="dropzone" role="button" tabindex="0" aria-describedby="dropzone-hint">
+          <svg aria-hidden="true" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p id="dropzone-hint">拖拽文件到此处，或点击选择</p>
+        </div>
+        <input id="file-input" type="file" multiple accept=".jpg,.jpeg,.png,.pdf" hidden>
+        <ul class="file-list" data-bind="file-list" data-empty="尚未选择文件"></ul>
+        <label class="field">
+          <span>PDF 渲染 DPI（100-300）</span>
+          <input type="number" name="pdf_dpi" min="100" max="300" value="200" step="10">
+        </label>
+        <button type="submit" class="btn-primary" data-action="submit" disabled>开始合并</button>
+      </form>
+    </section>
+
+    <section id="task-card" class="card hidden" role="status" aria-live="polite" aria-atomic="false">
+      <header class="task-head">
+        <span class="badge badge--queued" data-bind="state-label">排队中</span>
+        <p class="queue-position">队列位置：<span data-bind="position">—</span></p>
+      </header>
+      <progress class="progress" max="100" value="0" aria-label="处理进度" data-bind="progress"></progress>
+      <p class="progress-meta">
+        <span data-bind="progress-text">0/0</span>
+        <span class="sep" aria-hidden="true">·</span>
+        <span class="current-key">当前：<span data-bind="key">—</span></span>
+      </p>
+      <details class="warnings">
+        <summary>警告 (<span data-bind="warning-count">0</span>)</summary>
+        <ul class="warning-list" data-bind="warning-list"></ul>
+      </details>
+      <button type="button" class="btn-secondary" data-action="cancel">取消任务</button>
+    </section>
+
+    <section id="result-card" class="card hidden">
+      <h2>合并完成</h2>
+      <p class="summary" data-bind="summary"></p>
+      <div class="actions">
+        <a class="btn-primary" data-action="download" download>下载 PDF</a>
+        <button type="button" class="btn-secondary" data-action="reset">重新提交</button>
+      </div>
+    </section>
+
+    <section id="error-card" class="card hidden" role="alert" aria-live="assertive">
+      <header class="error-head">
+        <svg class="error-icon" aria-hidden="true" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <h2>处理失败</h2>
+      </header>
+      <p class="error-message" data-bind="error-message"></p>
+      <button type="button" class="btn-primary" data-action="reset">重新提交</button>
+    </section>
+
+    <section id="warnings-panel" class="card hidden" aria-label="所有警告">
+      <details class="warnings">
+        <summary>累计警告 (<span data-bind="warning-count-total">0</span>)</summary>
+        <ul class="warning-list" data-bind="warning-list-total"></ul>
+      </details>
+    </section>
+  </main>
+</body>
+</html>

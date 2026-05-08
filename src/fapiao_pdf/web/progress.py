@@ -134,7 +134,7 @@ class EventBus:
         terminal: bool = False,
         extra: dict[str, Any] | None = None,
     ) -> None:
-        payload = _snapshot_to_payload(snapshot)
+        payload = snapshot_to_payload(snapshot)
         if extra:
             payload.update(extra)
         event = TaskEvent(name=event_name, payload=payload, terminal=terminal)
@@ -205,8 +205,8 @@ async def stream_task_events(
     if is_terminal(snapshot.state):
         yield format_sse(
             TaskEvent(
-                name=_snapshot_event_name(snapshot),
-                payload=_snapshot_to_payload(snapshot),
+                name=event_name_for_snapshot(snapshot),
+                payload=snapshot_to_payload(snapshot),
                 terminal=True,
             )
         )
@@ -217,8 +217,8 @@ async def stream_task_events(
     try:
         snapshot = store.require_snapshot(task_id)
         seed = TaskEvent(
-            name=_snapshot_event_name(snapshot),
-            payload=_snapshot_to_payload(snapshot),
+            name=event_name_for_snapshot(snapshot),
+            payload=snapshot_to_payload(snapshot),
             terminal=is_terminal(snapshot.state),
         )
         yield format_sse(seed)
@@ -243,7 +243,7 @@ async def stream_task_events(
         bus.unsubscribe(task_id, sub.subscriber_id)
 
 
-def _snapshot_event_name(snapshot: TaskSnapshot) -> str:
+def event_name_for_snapshot(snapshot: TaskSnapshot) -> str:
     state = snapshot.state.value
     if state == "queued":
         return "queued"
@@ -256,7 +256,7 @@ def _snapshot_event_name(snapshot: TaskSnapshot) -> str:
     return "progress"
 
 
-def _snapshot_to_payload(snapshot: TaskSnapshot) -> dict[str, Any]:
+def snapshot_to_payload(snapshot: TaskSnapshot) -> dict[str, Any]:
     """TaskSnapshot → JSON 友好 dict（snake_case）。"""
     return {
         "task_id": snapshot.task_id,

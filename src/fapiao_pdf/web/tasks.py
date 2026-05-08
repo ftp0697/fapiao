@@ -1,18 +1,21 @@
 """任务模型与持久化：dataclass + TaskStore（线程安全）+ task.json round-trip。"""
 
 import json
+import logging
 import os
 import re
 import shutil
 import threading
 from collections import OrderedDict
 from dataclasses import asdict, dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Final
 from uuid import uuid4
 
 from fapiao_pdf.web.errors import TaskExpiredError, TaskNotFoundError, TaskState
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION: Final[int] = 1
 _TASK_FILE: Final[str] = "task.json"
@@ -189,6 +192,14 @@ class TaskStore:
             self._persist(record)
             return record
 
+    def set_queued(self, task_id: str) -> None:
+        with self._lock:
+            record = self._require(task_id)
+            if record.state is not TaskState.QUEUED:
+                raise ValueError(f"非法状态迁移：{record.state} → queued")
+            record.updated_at = _now()
+            self._persist(record)
+
     def set_running(self, task_id: str) -> None:
         with self._lock:
             record = self._require(task_id)
@@ -264,6 +275,39 @@ class TaskStore:
             self._placeholders[task_id] = placeholder
             self._evict_placeholders()
 
+    def expire_if_deletable(
+        self,
+        task_id: str,
+        *,
+        now: datetime,
+        retain_minutes: int,
+        download_grace_seconds: int,
+        reason: str,
+    ) -> TaskSnapshot | None:
+        with self._lock:
+            record = self._records.get(task_id)
+            if record is None or not _can_delete_record(
+                record,
+                now=now,
+                retain_minutes=retain_minutes,
+                download_grace_seconds=download_grace_seconds,
+            ):
+                return None
+            snapshot = self.to_snapshot(task_id)
+            if snapshot is None:
+                return None
+            self._records.pop(task_id, None)
+            self._placeholders[task_id] = ExpiredPlaceholder(
+                task_id=task_id, expired_at=now, reason=reason
+            )
+            self._evict_placeholders()
+            return replace(
+                snapshot,
+                state=TaskState.EXPIRED,
+                queue_position=None,
+                result_available=False,
+            )
+
     def note_download_started(self, task_id: str) -> None:
         with self._lock:
             record = self._require(task_id)
@@ -334,12 +378,22 @@ class TaskStore:
         with self._lock:
             return list(self._placeholders.values())
 
+    def drop_placeholder(self, task_id: str) -> None:
+        with self._lock:
+            self._placeholders.pop(task_id, None)
+
     def delete_task(self, task_id: str) -> None:
         with self._lock:
-            record = self._records.pop(task_id, None)
-            if record is None:
+            record = self._records.get(task_id)
+            if record is not None:
+                shutil.rmtree(record.task_dir, ignore_errors=False)
+                self._records.pop(task_id, None)
                 return
-            shutil.rmtree(record.task_dir, ignore_errors=False)
+            if not _TASK_ID_RE.match(task_id):
+                return
+            task_dir = self._root / task_id
+            if task_dir.exists():
+                shutil.rmtree(task_dir, ignore_errors=False)
 
     def load_from_disk(self, *, retain_minutes: int) -> None:
         """重启恢复：标 failed-restart + placeholder + 删除目录；保留终态记录。"""
@@ -376,7 +430,11 @@ class TaskStore:
             self._evict_placeholders()
             return
         if record.expires_at and record.expires_at < _now():
-            shutil.rmtree(task_dir, ignore_errors=True)
+            try:
+                shutil.rmtree(task_dir, ignore_errors=False)
+            except OSError:
+                logger.exception("failed to delete expired task directory %s", task_dir)
+                self._records[record.task_id] = record
             return
         self._records[record.task_id] = record
 
@@ -422,13 +480,34 @@ class TaskStore:
         return record
 
     def _compute_expires(self, now: datetime, retain_minutes: int) -> datetime:
-        from datetime import timedelta
-
         return now + timedelta(minutes=retain_minutes)
 
     def _evict_placeholders(self) -> None:
         while len(self._placeholders) > self._placeholder_max:
             self._placeholders.popitem(last=False)
+
+
+def _can_delete_record(
+    record: TaskRecord,
+    *,
+    now: datetime,
+    retain_minutes: int,
+    download_grace_seconds: int,
+) -> bool:
+    if record.state not in _TERMINAL_ALL:
+        return False
+    expires_at = record.expires_at
+    if expires_at is None:
+        if record.completed_at is None:
+            return False
+        expires_at = record.completed_at + timedelta(minutes=retain_minutes)
+    if not expires_at < now:
+        return False
+    if record.active_downloads > 0:
+        return False
+    if record.last_download_at is None:
+        return True
+    return now - record.last_download_at >= timedelta(seconds=download_grace_seconds)
 
 
 def _is_within(child: Path, parent: Path) -> bool:

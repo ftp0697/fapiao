@@ -9,8 +9,17 @@ import typer
 from fapiao_pdf import __version__
 from fapiao_pdf import pipeline
 
+try:
+    from fapiao_pdf.web import app as web_app_mod
+    from fapiao_pdf.web.config import WebConfig, validate_web_config
+except ImportError:
+    web_app_mod = None
+    WebConfig = None
+    validate_web_config = None
+
 _STDERR: bool = True
 _OVERWRITE_ACCEPTED: frozenset[str] = frozenset({"y", "yes", "是", "确认"})
+_LOOPBACK_HOSTS: frozenset[str] = frozenset({"127.0.0.1", "::1", "localhost"})
 
 app: typer.Typer = typer.Typer(
     no_args_is_help=True,
@@ -145,6 +154,90 @@ def init_command() -> None:
             typer.echo(f"OCR 模型初始化失败：{exc}", err=_STDERR)
             raise typer.Exit(code=2)
         typer.echo("OCR 模型已就绪。")
+
+    _run_with_keyboard_interrupt(_execute)
+
+
+@app.command("serve")
+def serve_command(
+    host: Annotated[
+        str,
+        typer.Option("--host", help="Web 服务监听地址，默认本机回环。"),
+    ] = "127.0.0.1",
+    port: Annotated[
+        int,
+        typer.Option("--port", help="Web 服务监听端口。"),
+    ] = 8000,
+    retain_minutes: Annotated[
+        int,
+        typer.Option("--retain-minutes", help="任务结果保留分钟数。"),
+    ] = 60,
+    max_upload_mb: Annotated[
+        int,
+        typer.Option("--max-upload-mb", help="单次上传总大小上限（MB）。"),
+    ] = 200,
+    max_files: Annotated[
+        int,
+        typer.Option("--max-files", help="单次上传文件数上限。"),
+    ] = 200,
+    max_single_file_mb: Annotated[
+        int,
+        typer.Option("--max-single-file-mb", help="单文件大小上限（MB）。"),
+    ] = 50,
+) -> None:
+    """启动本地 Web 服务（FastAPI + 单工作线程）。"""
+
+    def _execute() -> None:
+        if web_app_mod is None or WebConfig is None or validate_web_config is None:
+            typer.echo(
+                "Web 模式依赖未安装，请运行 `pip install -e .[web]`。",
+                err=_STDERR,
+            )
+            raise typer.Exit(code=2)
+        try:
+            cfg = validate_web_config(
+                WebConfig(
+                    host=host,
+                    port=port,
+                    retain_minutes=retain_minutes,
+                    max_upload_mb=max_upload_mb,
+                    max_files=max_files,
+                    max_single_file_mb=max_single_file_mb,
+                )
+            )
+        except ValueError as exc:
+            typer.echo(f"参数错误：{exc}", err=_STDERR)
+            raise typer.Exit(code=2)
+        if cfg.host.casefold() not in _LOOPBACK_HOSTS:
+            typer.echo(
+                "安全警告：当前 --host 不是本机回环地址，"
+                "Web 服务可能暴露给局域网或公网，请确认部署侧已加反向代理鉴权。",
+                err=_STDERR,
+            )
+        try:
+            pipeline.ensure_ocr_ready(allow_download=False)
+        except pipeline.OcrModelMissingError as exc:
+            typer.echo(f"OCR 模型未就绪，请先运行 `fapiao init`：{exc}", err=_STDERR)
+            raise typer.Exit(code=2)
+        except pipeline.FatalRunError as exc:
+            typer.echo(f"致命错误：{exc}", err=_STDERR)
+            raise typer.Exit(code=2)
+        try:
+            import uvicorn
+        except ImportError:
+            typer.echo(
+                "Web 模式依赖未安装，请运行 `pip install -e .[web]`。",
+                err=_STDERR,
+            )
+            raise typer.Exit(code=2)
+
+        uvicorn.run(
+            web_app_mod.create_app(cfg),
+            host=cfg.host,
+            port=cfg.port,
+            workers=1,
+            log_config=None,
+        )
 
     _run_with_keyboard_interrupt(_execute)
 

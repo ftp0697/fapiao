@@ -79,6 +79,19 @@ def test_create_task_assigns_unique_seq(tmp_path: Path) -> None:
     assert (tmp_path / a.task_id / "task.json").is_file()
 
 
+def test_set_queued_refreshes_existing_queued_record(tmp_path: Path) -> None:
+    store = TaskStore(tmp_path)
+    record = store.create_task(pdf_dpi=200)
+    before_record = store.get_record(record.task_id)
+    assert before_record is not None
+    before = before_record.updated_at
+    store.set_queued(record.task_id)
+    after = store.get_record(record.task_id)
+    assert after is not None
+    assert after.state is TaskState.QUEUED
+    assert after.updated_at >= before
+
+
 def test_state_transitions_and_persist(tmp_path: Path) -> None:
     store = TaskStore(tmp_path)
     record = store.create_task(pdf_dpi=200)
@@ -155,6 +168,17 @@ def test_mark_expired_then_require_raises_expired(tmp_path: Path) -> None:
     store.mark_expired(record.task_id, reason="ttl")
     with pytest.raises(TaskExpiredError):
         store.require_snapshot(record.task_id)
+    assert store.is_expired(record.task_id)
+
+
+def test_mark_expired_then_delete_task_removes_directory(tmp_path: Path) -> None:
+    store = TaskStore(tmp_path)
+    record = store.create_task(pdf_dpi=200)
+    task_dir = tmp_path / record.task_id
+    store.set_done(record.task_id, SummarySnapshot(0, 0, 0, 0), retain_minutes=60)
+    store.mark_expired(record.task_id, reason="ttl")
+    store.delete_task(record.task_id)
+    assert not task_dir.exists()
     assert store.is_expired(record.task_id)
 
 
